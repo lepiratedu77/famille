@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
+import RegisterSW from "@/components/register-sw";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,11 +18,15 @@ export const metadata: Metadata = {
   title: "CADARIO Family Hub",
   description: "Le centre de commande de la famille CADARIO",
   manifest: "/manifest.json",
-  themeColor: "#09090b",
+  icons: {
+    icon: "/icon-512x512.png",
+    apple: "/icon-512x512.png",
+  },
+  themeColor: "#8b5cf6",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Famille",
+    title: "CADARIO",
   },
 };
 
@@ -36,6 +41,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
+          <RegisterSW />
           {children}
         </AuthProvider>
       </body>
