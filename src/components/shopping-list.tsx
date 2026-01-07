@@ -382,7 +382,7 @@ export default function ShoppingList() {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center gap-1 opacity-100 transition-opacity">
                                         <Button
                                             variant="ghost"
                                             size="icon"
@@ -425,7 +425,7 @@ export default function ShoppingList() {
                                                     {item.name}
                                                 </p>
                                             </div>
-                                            <Button variant="ghost" size="icon" onClick={() => deleteItem(item.id)} className="text-white/10 hover:text-rose-400 h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button variant="ghost" size="icon" onClick={() => deleteItem(item.id)} className="text-white/10 hover:text-rose-400 h-8 w-8 opacity-100 transition-opacity">
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </Button>
                                         </Card>
