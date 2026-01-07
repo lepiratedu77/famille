@@ -16,6 +16,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CADARIO Family Hub",
   description: "Le centre de commande de la famille CADARIO",
+  manifest: "/manifest.json",
+  themeColor: "#09090b",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Famille",
+  },
 };
 
 export default function RootLayout({
