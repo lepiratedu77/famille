@@ -282,44 +282,44 @@ export default function BentoDashboard() {
 
     return (
         <div className="h-[100svh] bg-black text-white flex flex-col overflow-hidden">
-            {/* HEADER */}
-            <header className="shrink-0 flex items-center justify-between px-4 py-3 md:px-8 md:py-4 border-b border-white/5">
+            {/* HEADER - Ultra Compact */}
+            <header className="shrink-0 flex items-center justify-between px-3 py-2 md:px-6 md:py-3 border-b border-white/5">
                 <div>
-                    <h1 className="text-xl md:text-2xl font-bold tracking-tight text-indigo-400">CADARIO HUB</h1>
-                    <div className="flex items-center gap-2 text-[10px] md:text-xs text-white/40">
-                        <Clock className="w-3 h-3" />
-                        <span className="capitalize">{new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-                        <span className="text-emerald-500">• En ligne</span>
+                    <h1 className="text-lg md:text-xl font-bold tracking-tight text-indigo-400">CADARIO HUB</h1>
+                    <div className="flex items-center gap-1 text-[9px] md:text-[10px] text-white/40">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span className="capitalize">{new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}</span>
+                        <span className="text-emerald-500">• Live</span>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <div className="flex -space-x-2">
-                        {stats.profiles.slice(0, 4).map((p, i) => (
-                            <Avatar key={i} className="border-2 border-black w-7 h-7 md:w-8 md:h-8">
+                <div className="flex items-center gap-1.5">
+                    <div className="flex -space-x-1.5">
+                        {stats.profiles.slice(0, 3).map((p, i) => (
+                            <Avatar key={i} className="border-2 border-black w-6 h-6">
                                 {p.avatar_url ? (
                                     <AvatarImage src={p.avatar_url} />
                                 ) : (
-                                    <AvatarFallback className="text-[8px] font-bold" style={{ backgroundColor: p.color_code || '#8b5cf6' }}>
+                                    <AvatarFallback className="text-[7px] font-bold" style={{ backgroundColor: p.color_code || '#8b5cf6' }}>
                                         {p.full_name?.[0] || '?'}
                                     </AvatarFallback>
                                 )}
                             </Avatar>
                         ))}
                     </div>
-                    <button onClick={handleNotificationsClick} className="p-2 rounded-full bg-white/5 relative">
-                        <Bell className="w-4 h-4 text-white/60" />
-                        {hasUnreadNotifications && <span className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full" />}
+                    <button onClick={handleNotificationsClick} className="p-1.5 rounded-full bg-white/5 relative">
+                        <Bell className="w-3.5 h-3.5 text-white/60" />
+                        {hasUnreadNotifications && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-rose-500 rounded-full" />}
                     </button>
-                    <Link href="/settings" className="p-2 rounded-full bg-white/5">
-                        <Settings className="w-4 h-4 text-white/60" />
+                    <Link href="/settings" className="p-1.5 rounded-full bg-white/5">
+                        <Settings className="w-3.5 h-3.5 text-white/60" />
                     </Link>
                 </div>
             </header>
 
-            {/* MAIN GRID - Zero Scroll Strict */}
-            <main className="flex-1 min-h-0 p-2 md:p-3">
-                <div className="h-full grid grid-cols-2 md:grid-cols-4 grid-rows-[repeat(4,minmax(0,1fr))] md:grid-rows-[repeat(3,minmax(0,1fr))] gap-1.5 md:gap-2 max-w-[1400px] mx-auto">
+            {/* MAIN GRID - Zero Scroll Mobile: 2 cols x 3 rows */}
+            <main className="flex-1 p-1.5 md:p-3 overflow-hidden min-h-0">
+                <div className="h-full grid grid-cols-2 md:grid-cols-4 grid-rows-3 md:grid-rows-2 gap-1.5 md:gap-2 max-w-[1400px] mx-auto">
 
                     {/* HALL OF FAME */}
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="col-span-2 md:col-span-1 row-span-1 min-h-0">
