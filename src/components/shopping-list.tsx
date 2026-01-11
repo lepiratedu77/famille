@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ShoppingBag, Mic, Send, Plus, Trash2, Check, Sparkles, Loader2, Eraser, Users, LayoutList, LayoutGrid, Heart, User } from 'lucide-react'
+import { ShoppingBag, Mic, Send, Plus, Trash2, Check, Sparkles, Loader2, Eraser, Users, LayoutList, LayoutGrid, Heart, User, Copy } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -252,6 +252,38 @@ export default function ShoppingList() {
         setInput("Prendre du lait et 12 oeufs pour demain")
     }
 
+    // Copy list to clipboard
+    const copyListToClipboard = () => {
+        if (items.length === 0) {
+            alert('La liste est vide !')
+            return
+        }
+
+        const neededItems = items.filter(i => i.status === 'needed')
+        const boughtItems = items.filter(i => i.status === 'bought')
+
+        let listText = '🛒 LISTE DE COURSES\n\n'
+
+        if (neededItems.length > 0) {
+            listText += '📋 À acheter:\n'
+            neededItems.forEach(item => {
+                listText += `• ${item.name}\n`
+            })
+        }
+
+        if (boughtItems.length > 0) {
+            listText += '\n✅ Déjà pris:\n'
+            boughtItems.forEach(item => {
+                listText += `✓ ${item.name}\n`
+            })
+        }
+
+        listText += `\n—\n${neededItems.length} restant(s) | ${boughtItems.length} acheté(s)`
+
+        navigator.clipboard.writeText(listText)
+        alert('Liste copiée ! 📋')
+    }
+
     if (isLoading) return <div className="p-24 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-orange-400" /></div>
 
     return (
@@ -259,7 +291,17 @@ export default function ShoppingList() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-orange-300 flex items-center gap-2">
-                        <ShoppingBag className="w-6 h-6" /> Courses Intelligentes
+                        <button
+                            onClick={copyListToClipboard}
+                            className="hover:scale-110 hover:text-orange-400 transition-transform active:scale-95"
+                            title="Copier la liste"
+                        >
+                            <ShoppingBag className="w-6 h-6" />
+                        </button>
+                        Courses Intelligentes
+                        {items.length > 0 && (
+                            <span className="text-xs font-normal text-white/30 ml-2">({items.filter(i => i.status === 'needed').length} restants)</span>
+                        )}
                     </h2>
                     <p className="text-white/40 text-sm">Dites ce qu'il vous faut, Gemini s'occupe du reste.</p>
                 </div>

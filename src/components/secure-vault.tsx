@@ -80,24 +80,41 @@ export default function SecureVault() {
 
                 if (members) setFamilyMembers(members)
 
-                // Fetch My Items
-                const { data: myVault } = await supabase
-                    .from('vault_items')
-                    .select('*')
-                    .eq('owner_id', user.id)
-                    .order('created_at', { ascending: false })
+                // Fetch My Items - simple query without complex RLS
+                try {
+                    const { data: myVault, error: myVaultError } = await supabase
+                        .from('vault_items')
+                        .select('*')
+                        .eq('owner_id', user.id)
+                        .order('created_at', { ascending: false })
 
-                if (myVault) setMyItems(myVault)
+                    if (myVaultError) {
+                        console.error("Error fetching my vault items:", myVaultError)
+                    } else if (myVault) {
+                        setMyItems(myVault)
+                    }
+                } catch (e) {
+                    console.error("Vault fetch error:", e)
+                }
 
-                // Fetch Shared Items (via vault_shares join)
-                const { data: sharedVault } = await supabase
-                    .from('vault_items')
-                    .select('*, vault_shares!inner(*)')
-                    .or(`vault_shares.shared_with.eq.${user.id},vault_shares.shared_with.is.null`)
-                    .neq('owner_id', user.id)
-                    .order('created_at', { ascending: false })
+                // Fetch Shared Items - simplified query (vault_shares might not exist yet)
+                try {
+                    const { data: sharedVault, error: sharedError } = await supabase
+                        .from('vault_shares')
+                        .select('vault_item_id, vault_items(*)')
+                        .eq('shared_with', user.id)
 
-                if (sharedVault) setSharedItems(sharedVault)
+                    if (!sharedError && sharedVault) {
+                        // Extract vault_items from the join result
+                        const items = sharedVault
+                            .map((share: any) => share.vault_items)
+                            .filter((item: any) => item !== null)
+                        setSharedItems(items)
+                    }
+                } catch (e) {
+                    // vault_shares table might not exist - that's okay
+                    console.log("Shared vault not available:", e)
+                }
             }
         }
         fetchData()
@@ -120,28 +137,34 @@ export default function SecureVault() {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user || !user.id) throw new Error("No user")
 
+            // Get family_id from user's profile
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('family_id')
+                .eq('id', user.id)
+                .single()
+
+            if (!profile?.family_id) throw new Error("No family found")
+
             // 1. Encrypt
             const encryptedResult = await encryptData(newItemContent, masterPassword)
             const payload = JSON.stringify(encryptedResult)
 
-            // 2. Insert
-            const { error } = await supabase.from('vault_items').insert({
+            // 2. Insert with family_id
+            const { data: insertedItem, error } = await supabase.from('vault_items').insert({
                 owner_id: user.id,
+                family_id: profile.family_id,
                 title: newItemTitle,
                 description_encrypted: payload,
                 is_locked: true
-            })
+            }).select().single()
 
             if (error) throw error
 
-            // Refresh My Items
-            const { data: refreshed } = await supabase
-                .from('vault_items')
-                .select('*')
-                .eq('owner_id', user.id)
-                .order('created_at', { ascending: false })
-
-            if (refreshed) setMyItems(refreshed)
+            // Add item to state directly for instant UI update
+            if (insertedItem) {
+                setMyItems(prev => [insertedItem, ...prev])
+            }
 
             setIsDialogOpen(false)
             setNewItemTitle('')

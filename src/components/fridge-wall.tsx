@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, Plus, Trash2, Loader2, StickyNote } from 'lucide-react'
+import { MessageSquare, Plus, Trash2, Loader2, StickyNote, Eye } from 'lucide-react'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,7 @@ type FridgeNote = {
     profiles: {
         full_name: string
     }
+    seen_by?: string[] // Array of profile IDs who have seen the note
 }
 
 const COLORS = [
@@ -71,12 +72,22 @@ export default function FridgeWall() {
                         filter: `family_id=eq.${profile.family_id}`
                     }, async (payload) => {
                         if (payload.eventType === 'INSERT') {
+                            // Check for duplicates before adding
+                            const exists = notes.some(n => n.id === payload.new.id)
+                            if (exists) return
+
                             // Fetch profile name for the new note
                             const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', payload.new.profile_id).single()
                             const newNote = { ...payload.new, profiles: { full_name: prof?.full_name || 'Inconnu' } }
-                            setNotes(prev => [newNote as any, ...prev])
+                            setNotes(prev => {
+                                // Double check inside setter for race conditions
+                                if (prev.some(n => n.id === payload.new.id)) return prev
+                                return [newNote as any, ...prev]
+                            })
                         } else if (payload.eventType === 'DELETE') {
                             setNotes(prev => prev.filter(n => n.id !== payload.old.id))
+                        } else if (payload.eventType === 'UPDATE') {
+                            setNotes(prev => prev.map(n => n.id === payload.new.id ? { ...n, ...payload.new } : n))
                         }
                     })
                     .subscribe()
@@ -146,6 +157,26 @@ export default function FridgeWall() {
             console.error(error)
             alert("Erreur lors de la suppression.")
         }
+    }
+
+    const markAsSeen = async (note: FridgeNote) => {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
+        const currentSeen = note.seen_by || []
+        if (currentSeen.includes(user.id)) return // Already seen
+
+        const updatedSeen = [...currentSeen, user.id]
+
+        // Optimistic update
+        setNotes(prev => prev.map(n => n.id === note.id ? { ...n, seen_by: updatedSeen } : n))
+
+        const { error } = await supabase
+            .from('fridge_notes')
+            .update({ seen_by: updatedSeen })
+            .eq('id', note.id)
+
+        if (error) console.error("Error marking seen:", error)
     }
 
     if (isLoading) {
@@ -231,6 +262,16 @@ export default function FridgeWall() {
                                     <span className="text-[10px] italic">
                                         {new Date(note.created_at).toLocaleDateString()}
                                     </span>
+                                </div>
+                                <div className="absolute bottom-2 right-2 flex items-center justify-end">
+                                    <button
+                                        onClick={() => markAsSeen(note)}
+                                        className="text-[10px] text-black/40 hover:text-black flex items-center gap-1 transition-colors"
+                                        title="Marquer comme vu"
+                                    >
+                                        <Eye className="w-3 h-3" />
+                                        <span>{(note.seen_by || []).length}</span>
+                                    </button>
                                 </div>
                             </motion.div>
                         )

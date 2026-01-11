@@ -2,19 +2,27 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Vote, Plus, BarChart3, Loader2, Trash2 } from 'lucide-react'
+import { Vote, Plus, BarChart3, Loader2, Users, User, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 
+type PollVote = {
+    option_index: number
+    profile_id: string
+    profiles?: { full_name: string }
+}
+
 type Poll = {
     id: string
     question: string
     options: string[]
     status: 'open' | 'closed'
-    votes: { option_index: number }[]
+    profile_id: string
+    profiles?: { full_name: string }
+    poll_votes: PollVote[]
 }
 
 export default function PollWidget() {
@@ -25,6 +33,8 @@ export default function PollWidget() {
     const [newQuestion, setNewQuestion] = useState('')
     const [newOptions, setNewOptions] = useState(['', ''])
     const [userVotes, setUserVotes] = useState<Record<string, number>>({})
+    const [expandedPoll, setExpandedPoll] = useState<string | null>(null)
+    const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
     useEffect(() => {
         fetchPolls()
@@ -37,6 +47,7 @@ export default function PollWidget() {
             setIsLoading(false)
             return
         }
+        setCurrentUserId(user.id)
 
         const { data: profile } = await supabase
             .from('profiles')
@@ -47,16 +58,12 @@ export default function PollWidget() {
         if (profile?.family_id) {
             const { data: sqlPolls } = await supabase
                 .from('polls')
-                .select('*, poll_votes(option_index, profile_id)')
+                .select('*, profiles(full_name), poll_votes(option_index, profile_id, profiles(full_name))')
                 .eq('family_id', profile.family_id)
                 .order('created_at', { ascending: false })
 
             if (sqlPolls) {
-                const formatted = sqlPolls.map(p => ({
-                    ...p,
-                    votes: p.poll_votes || []
-                }))
-                setPolls(formatted as any)
+                setPolls(sqlPolls as any)
 
                 // Track user's own votes
                 const votesMap: Record<string, number> = {}
@@ -104,7 +111,7 @@ export default function PollWidget() {
                 poll_id: pollId,
                 profile_id: user.id,
                 option_index: optionIndex
-            })
+            }, { onConflict: 'poll_id,profile_id' })
 
             if (error) throw error
 
@@ -143,6 +150,27 @@ export default function PollWidget() {
             console.error(e)
         } finally {
             setIsCreating(false)
+        }
+    }
+
+    const getVotersForOption = (poll: Poll, optionIndex: number) => {
+        return poll.poll_votes
+            .filter(v => v.option_index === optionIndex)
+            .map(v => v.profiles?.full_name || 'Anonyme')
+    }
+
+    const handleDeletePoll = async (pollId: string) => {
+        if (!confirm('Supprimer ce sondage ?')) return
+
+        try {
+            // D'abord supprimer les votes associés
+            await supabase.from('poll_votes').delete().eq('poll_id', pollId)
+            // Puis supprimer le sondage
+            const { error } = await supabase.from('polls').delete().eq('id', pollId)
+            if (error) throw error
+            fetchPolls()
+        } catch (e) {
+            console.error('Erreur suppression:', e)
         }
     }
 
@@ -187,43 +215,90 @@ export default function PollWidget() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {polls.map(poll => {
-                    const totalVotes = poll.votes.length
+                    const totalVotes = poll.poll_votes.length
+                    const isExpanded = expandedPoll === poll.id
+
                     return (
                         <Card key={poll.id} className="bg-[#161617] border-white/5 overflow-hidden">
                             <CardHeader className="pb-2">
-                                <Badge variant="outline" className="w-fit mb-2 border-pink-500/30 text-pink-400 text-[9px] uppercase tracking-widest">
-                                    EN COURS
-                                </Badge>
+                                <div className="flex items-center justify-between">
+                                    <Badge variant="outline" className="w-fit border-pink-500/30 text-pink-400 text-[9px] uppercase tracking-widest">
+                                        EN COURS
+                                    </Badge>
+                                    {/* Bouton supprimer - visible seulement pour le créateur */}
+                                    {poll.profile_id === currentUserId && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => handleDeletePoll(poll.id)}
+                                            className="h-6 w-6 text-white/20 hover:text-rose-400 hover:bg-rose-500/10"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                    )}
+                                </div>
                                 <CardTitle className="text-base">{poll.question}</CardTitle>
+                                {/* Créateur du sondage */}
+                                <div className="flex items-center gap-1 text-[10px] text-white/30 mt-1">
+                                    <User className="w-3 h-3" />
+                                    <span>Créé par <span className="text-pink-300/70">{poll.profiles?.full_name || 'Inconnu'}</span></span>
+                                </div>
                             </CardHeader>
                             <CardContent className="space-y-3">
                                 {poll.options.map((opt, idx) => {
-                                    const voteCount = poll.votes.filter(v => v.option_index === idx).length
+                                    const voteCount = poll.poll_votes.filter(v => v.option_index === idx).length
                                     const percent = totalVotes > 0 ? (voteCount / totalVotes) * 100 : 0
                                     const isSelected = userVotes[poll.id] === idx
+                                    const voters = getVotersForOption(poll, idx)
 
                                     return (
-                                        <button
-                                            key={idx}
-                                            onClick={() => handleVote(poll.id, idx)}
-                                            className={`w-full group relative h-10 rounded-lg overflow-hidden border transition-all ${isSelected ? 'border-pink-500 bg-pink-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
-                                        >
-                                            <div
-                                                className={`absolute inset-y-0 left-0 transition-all duration-500 ${isSelected ? 'bg-pink-500/20' : 'bg-white/5'}`}
-                                                style={{ width: `${percent}%` }}
-                                            />
-                                            <div className="relative px-4 flex justify-between items-center h-full text-sm">
-                                                <span className={isSelected ? 'font-bold text-pink-200' : 'text-white/70'}>{opt}</span>
-                                                <span className="text-[10px] opacity-40">{Math.round(percent)}%</span>
-                                            </div>
-                                        </button>
+                                        <div key={idx} className="space-y-1">
+                                            <button
+                                                onClick={() => handleVote(poll.id, idx)}
+                                                className={`w-full group relative h-10 rounded-lg overflow-hidden border transition-all ${isSelected ? 'border-pink-500 bg-pink-500/10' : 'border-white/5 bg-white/5 hover:bg-white/10'}`}
+                                            >
+                                                <div
+                                                    className={`absolute inset-y-0 left-0 transition-all duration-500 ${isSelected ? 'bg-pink-500/20' : 'bg-white/5'}`}
+                                                    style={{ width: `${percent}%` }}
+                                                />
+                                                <div className="relative px-4 flex justify-between items-center h-full text-sm">
+                                                    <span className={isSelected ? 'font-bold text-pink-200' : 'text-white/70'}>{opt}</span>
+                                                    <span className="text-[10px] opacity-40">{voteCount} ({Math.round(percent)}%)</span>
+                                                </div>
+                                            </button>
+                                            {/* Afficher les votants si le panel est ouvert */}
+                                            <AnimatePresence>
+                                                {isExpanded && voters.length > 0 && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, height: 0 }}
+                                                        animate={{ opacity: 1, height: 'auto' }}
+                                                        exit={{ opacity: 0, height: 0 }}
+                                                        className="pl-4 text-[10px] text-white/40 flex flex-wrap gap-1"
+                                                    >
+                                                        {voters.map((name, i) => (
+                                                            <span key={i} className="bg-white/5 px-2 py-0.5 rounded-full">{name}</span>
+                                                        ))}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
                                     )
                                 })}
                             </CardContent>
-                            <CardFooter className="pt-0 pb-4 text-[10px] text-white/20 flex justify-between">
+                            <CardFooter className="pt-0 pb-4 text-[10px] text-white/20 flex justify-between items-center">
                                 <div className="flex items-center gap-1">
-                                    <BarChart3 className="w-3 h-3" /> {totalVotes} votes
+                                    <BarChart3 className="w-3 h-3" /> {totalVotes} vote{totalVotes > 1 ? 's' : ''}
                                 </div>
+                                {/* Bouton pour voir les votants */}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setExpandedPoll(isExpanded ? null : poll.id)}
+                                    className="h-6 text-[10px] text-pink-300/60 hover:text-pink-300 hover:bg-pink-500/10 gap-1"
+                                >
+                                    <Users className="w-3 h-3" />
+                                    {isExpanded ? 'Masquer' : 'Voir les votants'}
+                                </Button>
                             </CardFooter>
                         </Card>
                     )
