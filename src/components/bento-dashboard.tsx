@@ -71,6 +71,7 @@ export default function BentoDashboard() {
     const [editingShortcut, setEditingShortcut] = useState<Shortcut | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
     const [familyId, setFamilyId] = useState<string | null>(null)
+    const [copiedShortcut, setCopiedShortcut] = useState<number | null>(null)
     const [stats, setStats] = useState({
         profiles: [] as any[],
         karmaLeader: null as any,
@@ -88,15 +89,49 @@ export default function BentoDashboard() {
         }
     }
 
+    // Copy shopping list from database
+    const copyShoppingList = async (slot: number) => {
+        if (!familyId) return
+
+        const { data: items } = await supabase
+            .from('shopping_items')
+            .select('name, status')
+            .eq('family_id', familyId)
+            .eq('status', 'needed')
+            .order('created_at', { ascending: false })
+
+        if (!items || items.length === 0) {
+            setCopiedShortcut(slot)
+            setTimeout(() => setCopiedShortcut(null), 1500)
+            return
+        }
+
+        let listText = '🛒 LISTE CADARIO :\n'
+        items.forEach(item => {
+            listText += `- ${item.name}\n`
+        })
+        listText += `\n(${items.length} article${items.length > 1 ? 's' : ''})`
+
+        navigator.clipboard.writeText(listText)
+        setCopiedShortcut(slot)
+        setTimeout(() => setCopiedShortcut(null), 1500)
+    }
+
     // Execute shortcut action
-    const executeShortcut = (shortcut: Shortcut) => {
-        // If it's a navigation shortcut
-        if (shortcut.value === 'vault' || shortcut.value === 'shopping') {
+    const executeShortcut = async (shortcut: Shortcut) => {
+        // Shopping list special case - fetch from DB
+        if (shortcut.value === 'shopping' || shortcut.label.toLowerCase().includes('course')) {
+            await copyShoppingList(shortcut.slot)
+            return
+        }
+        // Navigation shortcuts
+        if (shortcut.value === 'vault') {
             return // Let Link handle it
         }
-        // Otherwise, copy to clipboard
+        // Otherwise, copy value to clipboard
         navigator.clipboard.writeText(shortcut.value)
-        alert(`${shortcut.label} copié ! ✅`)
+        setCopiedShortcut(shortcut.slot)
+        setTimeout(() => setCopiedShortcut(null), 1500)
     }
 
     // Open edit dialog
@@ -282,42 +317,40 @@ export default function BentoDashboard() {
                 </div>
             </header>
 
-            {/* MAIN GRID */}
-            <main className="flex-1 p-3 md:p-6 overflow-hidden">
-                <div className="h-full grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-[1400px] mx-auto">
+            {/* MAIN GRID - Zero Scroll Strict */}
+            <main className="flex-1 min-h-0 p-2 md:p-3">
+                <div className="h-full grid grid-cols-2 md:grid-cols-4 grid-rows-[repeat(4,minmax(0,1fr))] md:grid-rows-[repeat(3,minmax(0,1fr))] gap-1.5 md:gap-2 max-w-[1400px] mx-auto">
 
                     {/* HALL OF FAME */}
-                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="col-span-2 md:col-span-1 row-span-1">
-                        <Card className="h-full bg-gradient-to-br from-amber-500/20 via-yellow-500/10 to-orange-500/20 border-amber-500/30 rounded-2xl p-4 flex flex-col items-center justify-center text-center relative overflow-hidden">
-                            <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute top-2 right-2">
-                                <Sparkles className="w-4 h-4 text-amber-400/50" />
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="col-span-2 md:col-span-1 row-span-1 min-h-0">
+                        <Card className="h-full bg-gradient-to-br from-amber-500/20 via-yellow-500/10 to-orange-500/20 border-amber-500/30 rounded-xl p-2 md:p-3 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                            <motion.div animate={{ rotate: 360 }} transition={{ duration: 20, repeat: Infinity, ease: 'linear' }} className="absolute top-1 right-1">
+                                <Sparkles className="w-3 h-3 text-amber-400/50" />
                             </motion.div>
-                            <Crown className="w-6 h-6 text-amber-400 mb-2" />
-                            <p className="text-[10px] uppercase tracking-widest text-amber-300/70 mb-2">Leader Karma</p>
+                            <Crown className="w-4 h-4 md:w-5 md:h-5 text-amber-400 mb-1" />
+                            <p className="text-[8px] md:text-[9px] uppercase tracking-widest text-amber-300/70 mb-1">Leader</p>
                             {stats.karmaLeader && (
                                 <>
-                                    <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity }}>
-                                        <Avatar className="w-12 h-12 border-2 border-amber-400/50 mb-2">
-                                            {stats.karmaLeader.avatar_url ? (
-                                                <AvatarImage src={stats.karmaLeader.avatar_url} />
-                                            ) : (
-                                                <AvatarFallback style={{ backgroundColor: stats.karmaLeader.color_code }} className="text-lg font-bold">
-                                                    {stats.karmaLeader.full_name?.[0]}
-                                                </AvatarFallback>
-                                            )}
-                                        </Avatar>
-                                    </motion.div>
-                                    <p className="font-bold text-sm text-white">{stats.karmaLeader.full_name}</p>
-                                    <p className="text-xl font-black text-amber-400">{stats.karmaLeader.points || 0} pts</p>
+                                    <Avatar className="w-8 h-8 md:w-10 md:h-10 border-2 border-amber-400/50 mb-1">
+                                        {stats.karmaLeader.avatar_url ? (
+                                            <AvatarImage src={stats.karmaLeader.avatar_url} />
+                                        ) : (
+                                            <AvatarFallback style={{ backgroundColor: stats.karmaLeader.color_code }} className="text-sm font-bold">
+                                                {stats.karmaLeader.full_name?.[0]}
+                                            </AvatarFallback>
+                                        )}
+                                    </Avatar>
+                                    <p className="font-bold text-[10px] md:text-xs text-white truncate max-w-full">{stats.karmaLeader.full_name}</p>
+                                    <p className="text-sm md:text-lg font-black text-amber-400">{stats.karmaLeader.points || 0}</p>
                                 </>
                             )}
                         </Card>
                     </motion.div>
 
                     {/* RACCOURCIS EXPRESS - EDITABLE */}
-                    <Card className="col-span-2 md:col-span-1 row-span-1 bg-[#151516] border-white/10 rounded-2xl p-3 md:p-4">
-                        <p className="text-[10px] uppercase tracking-widest text-white/40 mb-3 text-center">Raccourcis</p>
-                        <div className="grid grid-cols-2 gap-2 h-[calc(100%-24px)]">
+                    <Card className="col-span-2 md:col-span-1 row-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 overflow-hidden min-h-0">
+                        <p className="text-[8px] md:text-[9px] uppercase tracking-widest text-white/40 mb-1.5 text-center">Raccourcis</p>
+                        <div className="grid grid-cols-2 gap-1.5 h-[calc(100%-18px)] min-h-0">
                             {shortcuts.map((shortcut) => {
                                 const IconComponent = getIconComponent(shortcut.icon)
                                 const isNavigation = shortcut.value === 'vault' || shortcut.value === 'shopping'
@@ -326,11 +359,20 @@ export default function BentoDashboard() {
                                 const buttonContent = (
                                     <Button
                                         variant="ghost"
-                                        onClick={() => !isNavigation && executeShortcut(shortcut)}
+                                        onClick={() => executeShortcut(shortcut)}
                                         className={`h-full w-full ${colorClasses} border rounded-xl flex flex-col items-center justify-center gap-1 relative group`}
                                     >
-                                        <IconComponent className="w-5 h-5" />
-                                        <span className="text-[9px] font-bold">{shortcut.label}</span>
+                                        {copiedShortcut === shortcut.slot ? (
+                                            <>
+                                                <Check className="w-5 h-5 text-emerald-400" />
+                                                <span className="text-[9px] font-bold text-emerald-400">Copié ✅</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IconComponent className="w-5 h-5" />
+                                                <span className="text-[9px] font-bold">{shortcut.label}</span>
+                                            </>
+                                        )}
                                         {/* Edit button */}
                                         <button
                                             onClick={(e) => openEditDialog(shortcut, e)}
@@ -341,9 +383,10 @@ export default function BentoDashboard() {
                                     </Button>
                                 )
 
-                                if (isNavigation) {
+                                // Only vault is a navigation link now
+                                if (shortcut.value === 'vault') {
                                     return (
-                                        <Link key={shortcut.slot} href={`/#${shortcut.value}`} className="contents">
+                                        <Link key={shortcut.slot} href="/#vault" className="contents">
                                             {buttonContent}
                                         </Link>
                                     )
@@ -355,88 +398,88 @@ export default function BentoDashboard() {
 
                     {/* AGENDA */}
                     <Link href="/#agenda" className="contents">
-                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-2xl p-4 hover:border-rose-500/30 transition-all cursor-pointer flex flex-col justify-between">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-rose-500/10 rounded-lg"><Calendar className="w-4 h-4 text-rose-400" /></div>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">Agenda</span>
+                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 hover:border-rose-500/30 transition-all cursor-pointer flex flex-col justify-between overflow-hidden min-h-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <div className="p-1.5 bg-rose-500/10 rounded-lg"><Calendar className="w-3 h-3 md:w-4 md:h-4 text-rose-400" /></div>
+                                <span className="text-[8px] md:text-[9px] uppercase tracking-wider text-white/40">Agenda</span>
                             </div>
                             {stats.nextEvent ? (
-                                <div>
-                                    <p className="font-bold text-sm text-white truncate">{stats.nextEvent.title}</p>
-                                    <p className="text-[10px] text-rose-400">{new Date(stats.nextEvent.start_time).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}</p>
+                                <div className="min-w-0">
+                                    <p className="font-bold text-[10px] md:text-xs text-white truncate">{stats.nextEvent.title}</p>
+                                    <p className="text-[8px] md:text-[9px] text-rose-400">{new Date(stats.nextEvent.start_time).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}</p>
                                 </div>
                             ) : (
-                                <p className="text-xs text-white/30">Aucun événement</p>
+                                <p className="text-[9px] text-white/30">Aucun</p>
                             )}
                         </Card>
                     </Link>
 
                     {/* COURSES */}
                     <Link href="/#shopping" className="contents">
-                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-2xl p-4 hover:border-orange-500/30 transition-all cursor-pointer flex flex-col justify-between">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-orange-500/10 rounded-lg"><ShoppingCart className="w-4 h-4 text-orange-400" /></div>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">Courses</span>
+                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 hover:border-orange-500/30 transition-all cursor-pointer flex flex-col justify-between overflow-hidden min-h-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <div className="p-1.5 bg-orange-500/10 rounded-lg"><ShoppingCart className="w-3 h-3 md:w-4 md:h-4 text-orange-400" /></div>
+                                <span className="text-[8px] md:text-[9px] uppercase tracking-wider text-white/40">Courses</span>
                             </div>
                             <div>
-                                <p className="text-2xl font-black text-orange-400">{stats.neededShopItems}</p>
-                                <p className="text-[10px] text-white/40">article{stats.neededShopItems > 1 ? 's' : ''}</p>
+                                <p className="text-lg md:text-xl font-black text-orange-400">{stats.neededShopItems}</p>
+                                <p className="text-[8px] md:text-[9px] text-white/40">article{stats.neededShopItems > 1 ? 's' : ''}</p>
                             </div>
                         </Card>
                     </Link>
 
                     {/* FRIGO */}
                     <Link href="/#fridge" className="contents">
-                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-2xl p-4 hover:border-yellow-500/30 transition-all cursor-pointer flex flex-col justify-between">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-yellow-500/10 rounded-lg"><MessageSquare className="w-4 h-4 text-yellow-400" /></div>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">Frigo</span>
+                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 hover:border-yellow-500/30 transition-all cursor-pointer flex flex-col justify-between overflow-hidden min-h-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <div className="p-1.5 bg-yellow-500/10 rounded-lg"><MessageSquare className="w-3 h-3 md:w-4 md:h-4 text-yellow-400" /></div>
+                                <span className="text-[8px] md:text-[9px] uppercase tracking-wider text-white/40">Frigo</span>
                             </div>
                             <div>
-                                <p className="text-2xl font-black text-yellow-400">{stats.fridgeNotesCount}</p>
-                                <p className="text-[10px] text-white/40">post-it{stats.fridgeNotesCount > 1 ? 's' : ''}</p>
+                                <p className="text-lg md:text-xl font-black text-yellow-400">{stats.fridgeNotesCount}</p>
+                                <p className="text-[8px] md:text-[9px] text-white/40">note{stats.fridgeNotesCount > 1 ? 's' : ''}</p>
                             </div>
                         </Card>
                     </Link>
 
                     {/* VAULT */}
                     <Link href="/#vault" className="contents">
-                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-2xl p-4 hover:border-indigo-500/30 transition-all cursor-pointer flex flex-col justify-between">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-indigo-500/10 rounded-lg"><Lock className="w-4 h-4 text-indigo-400" /></div>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">Vault</span>
+                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 hover:border-indigo-500/30 transition-all cursor-pointer flex flex-col justify-between overflow-hidden min-h-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <div className="p-1.5 bg-indigo-500/10 rounded-lg"><Lock className="w-3 h-3 md:w-4 md:h-4 text-indigo-400" /></div>
+                                <span className="text-[8px] md:text-[9px] uppercase tracking-wider text-white/40">Vault</span>
                             </div>
                             <div>
-                                <p className="text-2xl font-black text-indigo-400">{stats.vaultCount}</p>
-                                <p className="text-[10px] text-white/40">doc{stats.vaultCount > 1 ? 's' : ''}</p>
+                                <p className="text-lg md:text-xl font-black text-indigo-400">{stats.vaultCount}</p>
+                                <p className="text-[8px] md:text-[9px] text-white/40">doc{stats.vaultCount > 1 ? 's' : ''}</p>
                             </div>
                         </Card>
                     </Link>
 
                     {/* KARMA */}
                     <Link href="/#karma" className="contents">
-                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-2xl p-4 hover:border-emerald-500/30 transition-all cursor-pointer flex flex-col justify-between">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-emerald-500/10 rounded-lg"><Trophy className="w-4 h-4 text-emerald-400" /></div>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">Karma</span>
+                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 hover:border-emerald-500/30 transition-all cursor-pointer flex flex-col justify-between overflow-hidden min-h-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <div className="p-1.5 bg-emerald-500/10 rounded-lg"><Trophy className="w-3 h-3 md:w-4 md:h-4 text-emerald-400" /></div>
+                                <span className="text-[8px] md:text-[9px] uppercase tracking-wider text-white/40">Karma</span>
                             </div>
                             <div>
-                                <p className="text-2xl font-black text-emerald-400">{stats.profiles.reduce((sum, p) => sum + (p.points || 0), 0)}</p>
-                                <p className="text-[10px] text-white/40">pts total</p>
+                                <p className="text-lg md:text-xl font-black text-emerald-400">{stats.profiles.reduce((sum, p) => sum + (p.points || 0), 0)}</p>
+                                <p className="text-[8px] md:text-[9px] text-white/40">pts total</p>
                             </div>
                         </Card>
                     </Link>
 
                     {/* VOTES */}
                     <Link href="/#polls" className="contents">
-                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-2xl p-4 hover:border-pink-500/30 transition-all cursor-pointer flex flex-col justify-between">
-                            <div className="flex items-center gap-2 mb-2">
-                                <div className="p-2 bg-pink-500/10 rounded-lg"><Vote className="w-4 h-4 text-pink-400" /></div>
-                                <span className="text-[10px] uppercase tracking-wider text-white/40">Votes</span>
+                        <Card className="col-span-1 bg-[#151516] border-white/10 rounded-xl p-2 md:p-3 hover:border-pink-500/30 transition-all cursor-pointer flex flex-col justify-between overflow-hidden min-h-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <div className="p-1.5 bg-pink-500/10 rounded-lg"><Vote className="w-3 h-3 md:w-4 md:h-4 text-pink-400" /></div>
+                                <span className="text-[8px] md:text-[9px] uppercase tracking-wider text-white/40">Votes</span>
                             </div>
                             <div>
-                                <p className="text-2xl font-black text-pink-400">{stats.pollsCount}</p>
-                                <p className="text-[10px] text-white/40">actif{stats.pollsCount > 1 ? 's' : ''}</p>
+                                <p className="text-lg md:text-xl font-black text-pink-400">{stats.pollsCount}</p>
+                                <p className="text-[8px] md:text-[9px] text-white/40">actif{stats.pollsCount > 1 ? 's' : ''}</p>
                             </div>
                         </Card>
                     </Link>
